@@ -22,8 +22,10 @@ import {
   XCircle,
   Loader2,
   AlertTriangle,
-  Ban
+  Ban,
+  ShieldCheck
 } from 'lucide-react';
+import SecuritySettings from '@/components/SecuritySettings';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -37,7 +39,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { exams, results, startExam, isExamDisqualified, canRetakeExam, getExamQuestions } = useExam();
-  const [activeTab, setActiveTab] = useState<'exams' | 'results'>('exams');
+  const [activeTab, setActiveTab] = useState<'exams' | 'results' | 'security'>('exams');
   const [selectedExamId, setSelectedExamId] = useState<string | null>(null);
   const [examPassword, setExamPassword] = useState('');
   const [isStarting, setIsStarting] = useState(false);
@@ -106,6 +108,7 @@ const Dashboard = () => {
   const tabs = [
     { id: 'exams', label: 'Exams', icon: BookOpen },
     { id: 'results', label: 'Results', icon: Trophy },
+    { id: 'security', label: 'Security', icon: ShieldCheck },
   ];
 
   // Get result for a specific exam
@@ -488,6 +491,21 @@ const Dashboard = () => {
                   ))}
                 </div>
               )}
+            </motion.div>
+          )}
+
+          {activeTab === 'security' && (
+            <motion.div
+              key="security"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-6"
+            >
+              <div className="bg-card/50 backdrop-blur-sm rounded-xl p-6 shadow-sm border">
+                <h2 className="text-xl font-semibold mb-6">Security Settings</h2>
+                <SecuritySettings />
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
