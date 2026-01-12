@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Exam App with Biometric</string>
+    <string name="title_activity_main">Exam App with Biometric</string>
+    <string name="package_name">com.examapp.biometric</string>
+    <string name="custom_url_scheme">com.examapp.biometric</string>
+</resources>
