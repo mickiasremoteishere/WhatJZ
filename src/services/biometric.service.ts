@@ -1,4 +1,5 @@
 import { NativeBiometric } from 'capacitor-native-biometric';
+import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import { isPlatform } from '@ionic/react';
 
@@ -6,21 +7,64 @@ export interface BiometricCredentials {
   username: string;
   password: string;
   role: string;
+  biometricType?: 'face' | 'fingerprint';
+  lastUsed?: number;
+}
+
+export interface AvailableBiometricTypes {
+  face: boolean;
+  fingerprint: boolean;
 }
 
 export class BiometricService {
   private static readonly STORAGE_KEY = 'biometric_credentials';
+  private static readonly BIOMETRIC_TYPE_KEY = 'biometric_type';
+
+  /**
+   * Get the available biometric types on the device
+   */
+  static async getAvailableBiometricTypes(): Promise<AvailableBiometricTypes> {
+    if (!Capacitor.isNativePlatform()) {
+      // For web, return both as available for demo purposes
+      return { face: true, fingerprint: true };
+    }
+
+    try {
+      const result = await NativeBiometric.isAvailable();
+      const biometryType = String(result.biometryType || '').toLowerCase();
+      return {
+        face: biometryType.includes('face'),
+        fingerprint: biometryType.includes('finger') || biometryType.includes('touch')
+      };
+    } catch (error) {
+      console.error('Error getting biometric types:', error);
+      return { face: false, fingerprint: false };
+    }
+  }
+
+  /**
+   * Get the currently stored biometric type
+   */
+  static async getStoredBiometricType(): Promise<string | null> {
+    if (!Capacitor.isNativePlatform()) {
+      const stored = localStorage.getItem(this.BIOMETRIC_TYPE_KEY);
+      return stored ? JSON.parse(stored) : null;
+    }
+
+    const { value } = await Preferences.get({ key: this.BIOMETRIC_TYPE_KEY });
+    return value ? JSON.parse(value) : null;
+  }
 
   /**
    * Check if biometric authentication is available on the device
    */
   static async isAvailable(): Promise<boolean> {
     try {
-      if (!isPlatform('capacitor')) {
+      if (!Capacitor.isNativePlatform()) {
         console.log('Running in web mode - using mock biometrics');
         return true; // Enable mock biometrics for web
       }
-      
+
       const result = await NativeBiometric.isAvailable();
       return result.isAvailable;
     } catch (error) {
@@ -34,28 +78,45 @@ export class BiometricService {
    */
   static async saveCredentials(credentials: BiometricCredentials): Promise<void> {
     try {
-      if (!isPlatform('capacitor')) {
+      const credsWithTimestamp = {
+        ...credentials,
+        lastUsed: Date.now()
+      };
+
+      if (!Capacitor.isNativePlatform()) {
         // Mock save for web
         console.log('Mock saving credentials for web');
-        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(credentials));
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(credsWithTimestamp));
+        if (credentials.biometricType) {
+          localStorage.setItem(this.BIOMETRIC_TYPE_KEY, JSON.stringify(credentials.biometricType));
+        }
         return;
       }
-      
-      // Save to secure storage using Capacitor's Preferences
+
+      // Save to secure storage
       await Preferences.set({
         key: this.STORAGE_KEY,
-        value: JSON.stringify(credentials)
+        value: JSON.stringify(credsWithTimestamp)
       });
 
-      // Set up biometric authentication
-      await NativeBiometric.setCredentials({
-        username: credentials.username,
-        password: credentials.password,
-        server: 'exam-app',
-      });
+      // Store the biometric type separately for quick access
+      if (credentials.biometricType) {
+        await Preferences.set({
+          key: this.BIOMETRIC_TYPE_KEY,
+          value: JSON.stringify(credentials.biometricType)
+        });
+      }
+      // For native, we'll use the biometric plugin's built-in storage
+      if (Capacitor.isNativePlatform()) {
+        await NativeBiometric.setCredentials({
+          username: credentials.username,
+          password: credentials.password,
+          server: 'whatj-app',
+        });
+      }
     } catch (error) {
-      console.error('Failed to save biometric credentials:', error);
-      throw error;
+      console.error('Error saving biometric credentials:', error);
+      throw new Error('Failed to save biometric credentials');
     }
   }
 
@@ -68,103 +129,23 @@ export class BiometricService {
     subtitle?: string;
   }): Promise<boolean> {
     try {
-      if (!isPlatform('capacitor')) {
-        // Enhanced mock for web with better UI
+      if (!Capacitor.isNativePlatform()) {
+        // Mock verification for web
+        console.log('Mock biometric verification');
         return new Promise((resolve) => {
-          // Create a more styled dialog for web
-          const dialog = document.createElement('div');
-          dialog.style.position = 'fixed';
-          dialog.style.top = '0';
-          dialog.style.left = '0';
-          dialog.style.right = '0';
-          dialog.style.bottom = '0';
-          dialog.style.backgroundColor = 'rgba(0,0,0,0.5)';
-          dialog.style.display = 'flex';
-          dialog.style.justifyContent = 'center';
-          dialog.style.alignItems = 'center';
-          dialog.style.zIndex = '1000';
-          
-          const content = document.createElement('div');
-          content.style.background = 'white';
-          content.style.padding = '20px';
-          content.style.borderRadius = '8px';
-          content.style.maxWidth = '400px';
-          content.style.width = '90%';
-          content.style.textAlign = 'center';
-          
-          const title = document.createElement('h3');
-          title.textContent = options.title || 'Biometric Verification';
-          title.style.marginTop = '0';
-          title.style.color = '#333';
-          
-          const message = document.createElement('p');
-          message.textContent = options.reason;
-          message.style.marginBottom = '20px';
-          
-          const buttonContainer = document.createElement('div');
-          buttonContainer.style.display = 'flex';
-          buttonContainer.style.justifyContent = 'center';
-          buttonContainer.style.gap = '10px';
-          
-          const confirmBtn = document.createElement('button');
-          confirmBtn.textContent = 'Verify';
-          confirmBtn.style.padding = '8px 16px';
-          confirmBtn.style.border = 'none';
-          confirmBtn.style.borderRadius = '4px';
-          confirmBtn.style.background = '#4CAF50';
-          confirmBtn.style.color = 'white';
-          confirmBtn.style.cursor = 'pointer';
-          
-          const cancelBtn = document.createElement('button');
-          cancelBtn.textContent = 'Cancel';
-          cancelBtn.style.padding = '8px 16px';
-          cancelBtn.style.border = '1px solid #ccc';
-          cancelBtn.style.borderRadius = '4px';
-          cancelBtn.style.background = 'white';
-          cancelBtn.style.cursor = 'pointer';
-          
-          content.appendChild(title);
-          if (options.subtitle) {
-            const subtitle = document.createElement('p');
-            subtitle.textContent = options.subtitle;
-            subtitle.style.color = '#666';
-            content.appendChild(subtitle);
-          }
-          content.appendChild(message);
-          
-          buttonContainer.appendChild(confirmBtn);
-          buttonContainer.appendChild(cancelBtn);
-          content.appendChild(buttonContainer);
-          dialog.appendChild(content);
-          document.body.appendChild(dialog);
-          
-          // Handle button clicks
-          const cleanup = () => {
-            document.body.removeChild(dialog);
-            confirmBtn.removeEventListener('click', confirm);
-            cancelBtn.removeEventListener('click', cancel);
-          };
-          
-          const confirm = () => {
-            cleanup();
-            resolve(true);
-          };
-          
-          const cancel = () => {
-            cleanup();
-            resolve(false);
-          };
-          
-          confirmBtn.addEventListener('click', confirm);
-          cancelBtn.addEventListener('click', cancel);
+          // Simulate biometric verification with a delay
+          setTimeout(() => resolve(true), 1000);
         });
       }
 
       await NativeBiometric.verifyIdentity({
         reason: options.reason,
-        title: options.title || 'Authentication Required',
-        subtitle: options.subtitle,
+        title: options.title || 'Verify Identity',
+        subtitle: options.subtitle || '',
+        description: '',
+        useFallback: true // Allow device PIN/pattern/password as fallback
       });
+
       return true;
     } catch (error) {
       console.error('Biometric verification failed:', error);
@@ -189,18 +170,29 @@ export class BiometricService {
       }
 
       // Get stored credentials
-      if (!isPlatform('capacitor')) {
+      if (!Capacitor.isNativePlatform()) {
         const value = localStorage.getItem(this.STORAGE_KEY);
-        return value ? JSON.parse(value) as BiometricCredentials : null;
+        if (!value) return null;
+        
+        const credentials = JSON.parse(value) as BiometricCredentials;
+        // Update last used timestamp
+        credentials.lastUsed = Date.now();
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(credentials));
+        return credentials;
       }
       
       const { value } = await Preferences.get({ key: this.STORAGE_KEY });
+      if (!value) return null;
       
-      if (!value) {
-        return null;
-      }
-
-      return JSON.parse(value) as BiometricCredentials;
+      // Update last used timestamp
+      const credentials = JSON.parse(value) as BiometricCredentials;
+      credentials.lastUsed = Date.now();
+      await Preferences.set({
+        key: this.STORAGE_KEY,
+        value: JSON.stringify(credentials)
+      });
+      
+      return credentials;
     } catch (error) {
       console.error('Biometric authentication failed:', error);
       return null;
@@ -208,19 +200,29 @@ export class BiometricService {
   }
 
   /**
-   * Check if biometric credentials exist for the user
+   * Check if valid biometric credentials exist
    */
   static async hasBiometricCredentials(): Promise<boolean> {
     try {
-      if (!isPlatform('capacitor')) {
+      if (!Capacitor.isNativePlatform()) {
         // Mock check for web
         return !!localStorage.getItem(this.STORAGE_KEY);
       }
       
       const { value } = await Preferences.get({ key: this.STORAGE_KEY });
-      return !!value;
+      if (!value) return false;
+      
+      // Check if credentials are expired (30 days)
+      const credentials = JSON.parse(value) as BiometricCredentials;
+      const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+      if (credentials.lastUsed && (Date.now() - credentials.lastUsed) > THIRTY_DAYS) {
+        await this.removeCredentials();
+        return false;
+      }
+      
+      return true;
     } catch (error) {
-      console.error('Failed to check biometric credentials:', error);
+      console.error('Error checking biometric credentials:', error);
       return false;
     }
   }
@@ -230,16 +232,22 @@ export class BiometricService {
    */
   static async removeCredentials(): Promise<void> {
     try {
-      if (!isPlatform('capacitor')) {
+      if (!Capacitor.isNativePlatform()) {
         // Mock remove for web
         localStorage.removeItem(this.STORAGE_KEY);
+        localStorage.removeItem(this.BIOMETRIC_TYPE_KEY);
         return;
       }
       
-      await Preferences.remove({ key: this.STORAGE_KEY });
-      await NativeBiometric.deleteCredentials({
-        server: 'exam-app',
-      });
+      await Promise.all([
+        Preferences.remove({ key: this.STORAGE_KEY }),
+        Preferences.remove({ key: this.BIOMETRIC_TYPE_KEY }),
+        NativeBiometric.deleteCredentials({
+          server: 'whatj-app',
+        }).catch(() => {
+          // Ignore errors if credentials don't exist
+        })
+      ]);
     } catch (error) {
       console.error('Failed to remove biometric credentials:', error);
       throw error;

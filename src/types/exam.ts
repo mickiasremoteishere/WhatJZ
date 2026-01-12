@@ -2,6 +2,8 @@ export interface User {
   id: string;
   admissionId: string;
   name: string;
+  username: string;
+  password: string;
   email: string;
   role: 'student' | 'teacher' | 'admin';
   biometricEnabled: boolean;
