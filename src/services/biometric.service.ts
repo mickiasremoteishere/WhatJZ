@@ -17,8 +17,8 @@ export class BiometricService {
   static async isAvailable(): Promise<boolean> {
     try {
       if (!isPlatform('capacitor')) {
-        console.log('Biometric auth not available on web platform');
-        return false;
+        console.log('Running in web mode - using mock biometrics');
+        return true; // Enable mock biometrics for web
       }
       
       const result = await NativeBiometric.isAvailable();
@@ -34,6 +34,13 @@ export class BiometricService {
    */
   static async saveCredentials(credentials: BiometricCredentials): Promise<void> {
     try {
+      if (!isPlatform('capacitor')) {
+        // Mock save for web
+        console.log('Mock saving credentials for web');
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(credentials));
+        return;
+      }
+      
       // Save to secure storage using Capacitor's Preferences
       await Preferences.set({
         key: this.STORAGE_KEY,
@@ -62,10 +69,94 @@ export class BiometricService {
   }): Promise<boolean> {
     try {
       if (!isPlatform('capacitor')) {
-        // Simulate biometric verification on web
+        // Enhanced mock for web with better UI
         return new Promise((resolve) => {
-          const confirmed = window.confirm(`${options.reason}\n\nThis is a web preview. In a real app, you would see a native biometric prompt.`);
-          resolve(!!confirmed);
+          // Create a more styled dialog for web
+          const dialog = document.createElement('div');
+          dialog.style.position = 'fixed';
+          dialog.style.top = '0';
+          dialog.style.left = '0';
+          dialog.style.right = '0';
+          dialog.style.bottom = '0';
+          dialog.style.backgroundColor = 'rgba(0,0,0,0.5)';
+          dialog.style.display = 'flex';
+          dialog.style.justifyContent = 'center';
+          dialog.style.alignItems = 'center';
+          dialog.style.zIndex = '1000';
+          
+          const content = document.createElement('div');
+          content.style.background = 'white';
+          content.style.padding = '20px';
+          content.style.borderRadius = '8px';
+          content.style.maxWidth = '400px';
+          content.style.width = '90%';
+          content.style.textAlign = 'center';
+          
+          const title = document.createElement('h3');
+          title.textContent = options.title || 'Biometric Verification';
+          title.style.marginTop = '0';
+          title.style.color = '#333';
+          
+          const message = document.createElement('p');
+          message.textContent = options.reason;
+          message.style.marginBottom = '20px';
+          
+          const buttonContainer = document.createElement('div');
+          buttonContainer.style.display = 'flex';
+          buttonContainer.style.justifyContent = 'center';
+          buttonContainer.style.gap = '10px';
+          
+          const confirmBtn = document.createElement('button');
+          confirmBtn.textContent = 'Verify';
+          confirmBtn.style.padding = '8px 16px';
+          confirmBtn.style.border = 'none';
+          confirmBtn.style.borderRadius = '4px';
+          confirmBtn.style.background = '#4CAF50';
+          confirmBtn.style.color = 'white';
+          confirmBtn.style.cursor = 'pointer';
+          
+          const cancelBtn = document.createElement('button');
+          cancelBtn.textContent = 'Cancel';
+          cancelBtn.style.padding = '8px 16px';
+          cancelBtn.style.border = '1px solid #ccc';
+          cancelBtn.style.borderRadius = '4px';
+          cancelBtn.style.background = 'white';
+          cancelBtn.style.cursor = 'pointer';
+          
+          content.appendChild(title);
+          if (options.subtitle) {
+            const subtitle = document.createElement('p');
+            subtitle.textContent = options.subtitle;
+            subtitle.style.color = '#666';
+            content.appendChild(subtitle);
+          }
+          content.appendChild(message);
+          
+          buttonContainer.appendChild(confirmBtn);
+          buttonContainer.appendChild(cancelBtn);
+          content.appendChild(buttonContainer);
+          dialog.appendChild(content);
+          document.body.appendChild(dialog);
+          
+          // Handle button clicks
+          const cleanup = () => {
+            document.body.removeChild(dialog);
+            confirmBtn.removeEventListener('click', confirm);
+            cancelBtn.removeEventListener('click', cancel);
+          };
+          
+          const confirm = () => {
+            cleanup();
+            resolve(true);
+          };
+          
+          const cancel = () => {
+            cleanup();
+            resolve(false);
+          };
+          
+          confirmBtn.addEventListener('click', confirm);
+          cancelBtn.addEventListener('click', cancel);
         });
       }
 
@@ -98,6 +189,11 @@ export class BiometricService {
       }
 
       // Get stored credentials
+      if (!isPlatform('capacitor')) {
+        const value = localStorage.getItem(this.STORAGE_KEY);
+        return value ? JSON.parse(value) as BiometricCredentials : null;
+      }
+      
       const { value } = await Preferences.get({ key: this.STORAGE_KEY });
       
       if (!value) {
@@ -116,6 +212,11 @@ export class BiometricService {
    */
   static async hasBiometricCredentials(): Promise<boolean> {
     try {
+      if (!isPlatform('capacitor')) {
+        // Mock check for web
+        return !!localStorage.getItem(this.STORAGE_KEY);
+      }
+      
       const { value } = await Preferences.get({ key: this.STORAGE_KEY });
       return !!value;
     } catch (error) {
@@ -129,6 +230,12 @@ export class BiometricService {
    */
   static async removeCredentials(): Promise<void> {
     try {
+      if (!isPlatform('capacitor')) {
+        // Mock remove for web
+        localStorage.removeItem(this.STORAGE_KEY);
+        return;
+      }
+      
       await Preferences.remove({ key: this.STORAGE_KEY });
       await NativeBiometric.deleteCredentials({
         server: 'exam-app',
